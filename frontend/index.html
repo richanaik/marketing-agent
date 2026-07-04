@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Full-Funnel Marketing Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Background Ambient Effects -->
+    <div class="background-elements">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+    </div>
+
+    <main class="app-container">
+        
+        <!-- ==============================================
+             SCREEN 1: LANDING
+             ============================================== -->
+        <section id="screen-landing" class="screen active">
+            <h1 class="text-gradient">Full-Funnel Marketing Agent</h1>
+            <p>From brief to complete campaign in under 10 minutes.</p>
+            
+            <div class="timeline">
+                <div class="timeline-step glass-panel">Intake</div>
+                <div class="timeline-connector"></div>
+                <div class="timeline-step glass-panel">Strategy + Creative</div>
+                <div class="timeline-connector"></div>
+                <div class="timeline-step glass-panel">Delivery</div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="app.navigateTo('intake')">Start Campaign</button>
+        </section>
+
+        <!-- ==============================================
+             SCREEN 2: INTAKE FORM
+             ============================================== -->
+        <section id="screen-intake" class="screen hidden">
+    <div class="glass-panel form-container">
+        <h2>Campaign Brief</h2>
+        <form id="intake-form" onsubmit="app.submitIntake(event)">
+            
+            <div class="form-group">
+                <label>Business Name</label>
+                <input type="text" name="business_name" class="form-control" required placeholder="Acme Corp">
+            </div>
+            
+            <div class="form-group">
+                <label>Address</label>
+                <input type="text" name="business_address" class="form-control" placeholder="123 Innovation Way, Tech City">
+            </div>
+            <div class="form-group">
+                <label>Project Name</label>
+                <input type="text" name="project_name" class="form-control" required placeholder="Q3 Launch">
+            </div>
+            <div class="form-group">
+                <label>Services</label>
+                <textarea name="services" class="form-control" required placeholder="What are you selling?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Service Areas</label>
+                <input type="text" name="service_areas" class="form-control" placeholder="Global / Specific Regions">
+            </div>
+            <div class="form-group">
+                <label>Target Customer</label>
+                <textarea name="target_customer" class="form-control" required placeholder="Who is the ideal buyer?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Unique Value Props</label>
+                <textarea name="unique_value_props" class="form-control" required placeholder="Why choose you over competitors?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Competitors</label>
+                <input type="text" name="competitors" class="form-control" placeholder="Competitor A, Competitor B">
+            </div>
+            <div class="form-group">
+                <label>Monthly Budget</label>
+                <input type="text" name="monthly_budget" class="form-control" placeholder="$10,000">
+            </div>
+            <div class="form-group">
+                <label>Campaign Goal</label>
+                <select name="campaign_goal" class="form-control" required>
+                    <option value="">Select a goal</option>
+                    <option value="lead-gen">Lead Generation</option>
+                    <option value="brand-awareness">Brand Awareness</option>
+                    <option value="sales">Direct Sales</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="user_email" class="form-control" required placeholder="you@acme.com">
+            </div>
+            <div class="form-group">
+                <label>Website URLs</label>
+                <div id="dynamic-url-container" class="dynamic-rows">
+                    <div class="dynamic-row">
+                        <input type="url" name="page_url_0" class="form-control" placeholder="https://" required>
+                        <select name="page_type_0" class="form-control">
+                            <option value="homepage">Homepage</option>
+                            <option value="landing">Landing Page</option>
+                            <option value="product">Product Page</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-outline btn-add" onclick="app.addUrlRow()">+ Add URL</button>
+            </div>
+            <div style="margin-top: 2rem; text-align: right;">
+                <button type="submit" class="btn btn-primary">Submit Brief</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+        <!-- ==============================================
+             SCREEN 3: AGENT STATUS DASHBOARD
+             ============================================== -->
+        <section id="screen-dashboard" class="screen hidden">
+            <div class="dashboard-header">
+                <h2>Campaign in progress...</h2>
+                <div class="hitl-indicators">
+                    <div id="checkpoint-1" class="hitl-pill glass-panel pending">Checkpoint 1</div>
+                    <div id="checkpoint-2" class="hitl-pill glass-panel pending">Checkpoint 2</div>
+                    <div id="checkpoint-3" class="hitl-pill glass-panel pending">Checkpoint 3</div>
+                </div>
+            </div>
+
+            <div class="agent-grid" id="agent-grid">
+                <!-- Agent cards dynamically rendered via JS -->
+            </div>
+        </section>
+
+        <!-- ==============================================
+             SCREEN 4: HITL REVIEW PANEL
+             ============================================== -->
+        <section id="screen-hitl" class="screen hidden">
+            <div class="glass-panel review-panel">
+                <div class="review-header">
+                    <h2 id="review-title">Review Context</h2>
+                    <p id="review-desc" class="text-secondary">Please review the generated assets below.</p>
+                </div>
+                
+                <div class="drive-links" id="review-links">
+                    <!-- Links injected via JS -->
+                </div>
+
+                <div class="review-actions">
+                    <button class="btn btn-teal" onclick="app.handleReviewDecision('approve')">Approve & Continue</button>
+                    <button class="btn btn-outline" onclick="app.toggleFeedback()">Request Changes</button>
+                </div>
+
+                <div id="feedback-section" class="feedback-section">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">Feedback</label>
+                    <textarea class="form-control" placeholder="Detail the changes required..."></textarea>
+                    <div style="margin-top: 1rem; text-align: right;">
+                        <button class="btn btn-primary" onclick="app.handleReviewDecision('reject')">Submit Changes</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==============================================
+             SCREEN 5: OUTPUTS
+             ============================================== -->
+        <section id="screen-outputs" class="screen hidden">
+            <div class="glass-panel outputs-container">
+                <div class="hero-metric">
+                    <p class="text-secondary" style="margin-bottom: 0.5rem; font-size: 1.2rem;">Campaign Complete</p>
+                    <h2>Overall Score: 9.2 / 10</h2>
+                </div>
+
+                <div class="summary-data">
+                    <div class="data-card glass-panel">
+                        <div class="data-value">124</div>
+                        <div class="data-label">Keywords Analyzed</div>
+                    </div>
+                    <div class="data-card glass-panel">
+                        <div class="data-value">6</div>
+                        <div class="data-label">Ad Groups</div>
+                    </div>
+                    <div class="data-card glass-panel">
+                        <div class="data-value">3</div>
+                        <div class="data-label">Meta Stages</div>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 1rem;">Deliverables</h3>
+                <div class="drive-links">
+                    <a href="#" class="drive-link" onclick="event.preventDefault()">
+                        <div class="drive-icon">D</div>
+                        <div>
+                            <div style="font-weight: 500;">SEO/AEO Strategy Doc</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Google Docs</div>
+                        </div>
+                    </a>
+                    <a href="#" class="drive-link" onclick="event.preventDefault()">
+                        <div class="drive-icon">S</div>
+                        <div>
+                            <div style="font-weight: 500;">Google & Meta Ads Copy</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Google Sheets</div>
+                        </div>
+                    </a>
+                    <a href="#" class="drive-link" onclick="event.preventDefault()">
+                        <div class="drive-icon">F</div>
+                        <div>
+                            <div style="font-weight: 500;">Visual Creative Briefs</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Drive Folder</div>
+                        </div>
+                    </a>
+                </div>
+
+                <div style="margin-top: 3rem; text-align: center;">
+                    <button class="btn btn-outline" onclick="app.resetApp()">Start New Campaign</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+     <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

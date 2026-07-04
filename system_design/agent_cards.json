@@ -1,0 +1,978 @@
+{
+    "_meta": {
+        "schema_version": "1.0",
+        "protocol": "A2A v1.0 (Linux Foundation)",
+        "adk_version": "2.0",
+        "project": "Full-Funnel Marketing Agent",
+        "last_updated": "June 2026",
+        "purpose": "Machine-readable capability registry for all 6 agents. Read by: Supervisor agent at startup, Antigravity Workflow Runtime for dispatch planning, Agents CLI for execution routing, and the LLM Judge for output schema validation.",
+        "well_known_path": "marketing_agent/.well-known/",
+        "execution_environments": {
+            "antigravity_app": "Reads this file at startup to build the Agent Manager dispatch manifest. Each agent entry becomes a node in the Workflow Runtime graph.",
+            "agents_cli": "Parses this file to validate --agent flag values and resolve context_key dependencies before execution.",
+            "llm_judge": "References output_schema for each agent when scoring evaluation rubric compliance.",
+            "antigravity_ide": "Displays agent registry in the sidebar for file-to-agent mapping."
+        }
+    },
+    "agents": [
+        {
+            "agent_id": "intake_agent",
+            "name": "Intake Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/intake_agent-card.json",
+            "a2a_endpoint": "local://intake_agent",
+            "persona_file": "agents/intake_agent.md",
+            "model": "gemini-2.0-flash",
+            "temperature_guidance": "0.6 — slightly creative to feel conversational, not robotic",
+            "execution_type": "sequential_conversational",
+            "node_position": "graph_entry",
+            "max_turns": 20,
+            "timeout_seconds": 1800,
+            "description": "Conducts a structured 10-step conversational interview to collect a complete campaign brief from the user. The only agent that interacts directly with a human in a back-and-forth loop. All other agents are non-conversational.",
+            "vibe_coding_role": "Natural language IS the interface here — the user speaks plain English, the agent extracts structured data. This agent demonstrates the core vibe coding paradigm: human intent expressed in natural language, transformed into machine-readable schema.",
+            "tools": [],
+            "mcp_servers": [],
+            "grounding": false,
+            "a2a_receives_from": [],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [],
+            "context_writes": [
+                {
+                    "key": "intake.brief.v1",
+                    "schema": "IntakeBrief",
+                    "description": "Complete structured campaign brief after user confirmation"
+                }
+            ],
+            "input_spec": {
+                "type": "free_form_natural_language",
+                "description": "Any opening message from the user. No schema required. Agent conducts the structured interview itself.",
+                "examples": [
+                    "I want to set up a marketing campaign for my business",
+                    "Hi, I need help with ads and SEO for my photography studio in Goa",
+                    "Let's start building the campaign"
+                ]
+            },
+            "output_schema": {
+                "type": "object",
+                "format": "JSON wrapped in <INTAKE_COMPLETE> tags",
+                "required_fields": [
+                    "business_name",
+                    "business_address",
+                    "project_name",
+                    "user_email",
+                    "services",
+                    "service_areas",
+                    "target_customer",
+                    "unique_value_props",
+                    "page_urls",
+                    "competitors",
+                    "monthly_budget",
+                    "campaign_goal"
+                ],
+                "optional_fields": [
+                    "portfolio_images"
+                ],
+                "validation_rules": {
+                    "user_email": "Must match email regex pattern",
+                    "page_urls": "Each entry must have 'url' (valid URL) and 'type' (enum)",
+                    "services": "Array length >= 1",
+                    "unique_value_props": "Array length >= 2",
+                    "page_urls_type_enum": [
+                        "homepage",
+                        "service",
+                        "portfolio",
+                        "about",
+                        "contact",
+                        "blog",
+                        "pricing",
+                        "testimonials"
+                    ]
+                }
+            },
+            "failure_modes": {
+                "user_gives_vague_answer": "Ask ONE targeted follow-up question for that specific field only",
+                "user_skips_page_urls": "Prompt specifically: 'Please list your website pages one by one. Start with your homepage URL.'",
+                "max_turns_reached": "Output partial IntakeBrief with null for missing fields, flag them as incomplete"
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-INTAKE-1",
+                    "description": "Happy path — cooperative user with complete information",
+                    "input": "Hi, I want to build a campaign for my photography studio in Goa. It's called Goa Lens Studio.",
+                    "expected_behaviour": "Agent asks about address next (Group 2 of the 10-step interview), does not ask for all info at once"
+                },
+                {
+                    "id": "TP-INTAKE-2",
+                    "description": "Vague answer handling",
+                    "input": "I do photography in India",
+                    "expected_behaviour": "Agent asks ONE specific follow-up: 'Great! Which specific cities or regions in India do you serve? For example: Goa, Mumbai, Bangalore?'"
+                },
+                {
+                    "id": "TP-INTAKE-3",
+                    "description": "User tries to dump all info at once",
+                    "input": "My business is Goa Lens Studio at MG Road Panaji Goa, we do wedding photography and portraits, we serve Goa and Mumbai, target couples 25-35, our USPs are 10 years experience and candid style, website is goalensstudio.com, competitors are Studio XYZ, budget 30000 rupees, goal is lead gen, email is owner@goalensstudio.com",
+                    "expected_behaviour": "Agent extracts all available fields, confirms the summary, asks ONLY for the missing page URLs list before outputting IntakeBrief"
+                }
+            ]
+        },
+        {
+            "agent_id": "supervisor",
+            "name": "Supervisor Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/agent-card.json",
+            "a2a_endpoint": "local://supervisor",
+            "persona_file": "agents/supervisor.md",
+            "model": "gemini-2.0-flash",
+            "temperature_guidance": "0.1 — deterministic; validation and dispatch must be consistent",
+            "execution_type": "sequential_orchestrator",
+            "node_position": "graph_coordinator",
+            "timeout_seconds": 60,
+            "description": "The orchestration hub. Validates the IntakeBrief, decomposes the campaign goal into parallel tasks, dispatches subagents via A2A, merges outputs into bundles, enforces HITL checkpoints, runs the cross-channel consistency check, and manages error recovery.",
+            "vibe_coding_role": "The supervisor's behaviour is entirely defined by its natural language persona file (agents/supervisor.md). The Workflow Runtime reads the persona, builds the dispatch logic, and manages graph traversal. No Python orchestration code needed.",
+            "tools": [],
+            "mcp_servers": [],
+            "grounding": false,
+            "a2a_receives_from": [
+                "intake_agent"
+            ],
+            "a2a_sends_to": [
+                "seo_agent",
+                "google_ads_agent",
+                "meta_ads_agent",
+                "copywriter_agent",
+                "visual_agent"
+            ],
+            "context_reads": [
+                "intake.brief.v1"
+            ],
+            "context_writes": [
+                {
+                    "key": "supervisor.task_manifest.v1",
+                    "description": "Decomposed task list with per-agent field assignments"
+                },
+                {
+                    "key": "strategy.bundle.v1",
+                    "description": "Merged output of all 3 strategy agents + consistency check result"
+                },
+                {
+                    "key": "creative.bundle.v1",
+                    "description": "Merged output of copywriter + visual agents"
+                },
+                {
+                    "key": "supervisor.consistency_check.v1",
+                    "description": "Cross-channel alignment analysis across SEO/Ads/Meta"
+                }
+            ],
+            "input_spec": {
+                "type": "json_from_context_store",
+                "context_key": "intake.brief.v1",
+                "schema": "IntakeBrief"
+            },
+            "output_schema": {
+                "task_manifest": {
+                    "validation_status": "valid | invalid",
+                    "missing_fields": [
+                        "string"
+                    ],
+                    "warnings": [
+                        "string"
+                    ],
+                    "parallel_tasks": [
+                        {
+                            "agent_id": "string",
+                            "context_keys_to_pass": [
+                                "string"
+                            ],
+                            "filtered_fields": [
+                                "string"
+                            ],
+                            "output_key": "string"
+                        }
+                    ]
+                },
+                "consistency_check": {
+                    "consistent": true,
+                    "misalignments": [
+                        "string"
+                    ],
+                    "recommendations": [
+                        "string"
+                    ]
+                }
+            },
+            "hitl_checkpoints": [
+                {
+                    "id": "hitl_1",
+                    "triggers_after": "strategy.bundle.v1 complete",
+                    "blocks": [
+                        "copywriter_agent",
+                        "visual_agent"
+                    ],
+                    "user_commands": [
+                        "approve",
+                        "revise {agent}: {feedback}",
+                        "revise all: {feedback}"
+                    ]
+                },
+                {
+                    "id": "hitl_2",
+                    "triggers_after": "creative.bundle.v1 complete",
+                    "blocks": [
+                        "llm_judge",
+                        "delivery_phase"
+                    ],
+                    "user_commands": [
+                        "approve",
+                        "regenerate {copy_section}",
+                        "regenerate all headlines"
+                    ]
+                },
+                {
+                    "id": "hitl_3",
+                    "triggers_after": "eval.report.v1 complete",
+                    "blocks": [
+                        "delivery_phase"
+                    ],
+                    "user_commands": [
+                        "deliver",
+                        "revise: {issue}"
+                    ]
+                }
+            ],
+            "failure_modes": {
+                "agent_timeout": "Flag timeout in bundle, continue with partial bundle, notify user at next HITL",
+                "schema_validation_fail": "Return targeted clarification to user for specific invalid fields",
+                "consistency_check_fail": "Add warning to StrategyBundle, surface at HITL #1 with specific recommendation"
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-SUP-1",
+                    "description": "Complete valid IntakeBrief",
+                    "input": "{ complete IntakeBrief JSON from intake agent }",
+                    "expected_output": "task_manifest with validation_status: valid, 3 parallel_tasks dispatched"
+                },
+                {
+                    "id": "TP-SUP-2",
+                    "description": "Incomplete IntakeBrief (missing services and email)",
+                    "input": "{ IntakeBrief with empty services array and missing user_email }",
+                    "expected_output": "{ validation_status: invalid, missing_fields: ['services', 'user_email'], no dispatch }"
+                },
+                {
+                    "id": "TP-SUP-3",
+                    "description": "Cross-channel consistency mismatch",
+                    "input": "{ IntakeBrief where SEO targets 'commercial photographer Mumbai' but Meta targets 'wedding audience Goa' }",
+                    "expected_output": "consistency_check.consistent: false, misalignments: ['SEO location (Mumbai) conflicts with Meta audience location (Goa)'], recommendation: 'Align both to Goa + Mumbai dual-market strategy'"
+                }
+            ]
+        },
+        {
+            "agent_id": "seo_agent",
+            "name": "SEO / AEO / GEO Strategy Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/seo_agent-card.json",
+            "a2a_endpoint": "local://seo_agent",
+            "persona_file": "agents/seo_agent.md",
+            "model": "gemini-2.0-pro",
+            "temperature_guidance": "0.3 — research-driven; accuracy over creativity",
+            "execution_type": "parallel_node",
+            "node_position": "strategy_phase",
+            "timeout_seconds": 120,
+            "description": "Produces three interconnected outputs: (1) 30-keyword research report with AEO/GEO potential scoring, (2) JSON-LD schema blocks for every page URL submitted, (3) internal linking cluster map with pillar/satellite structure and content gap analysis.",
+            "vibe_coding_role": "Agent's entire behaviour specified in agents/seo_agent.md. Antigravity resolves the grounding tool call automatically from mcp_config.json. No Python tool-calling code required.",
+            "tools": [
+                "google_search_grounding"
+            ],
+            "mcp_servers": [
+                "gdrive"
+            ],
+            "grounding": true,
+            "a2a_receives_from": [
+                "supervisor"
+            ],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [
+                "intake.brief.v1 (filtered: business_name, services, service_areas, page_urls, competitors, target_customer)"
+            ],
+            "context_writes": [
+                {
+                    "key": "seo.strategy.v1",
+                    "description": "Full SEO strategy: keyword report + schemas per URL + internal linking map"
+                }
+            ],
+            "schema_types_by_page_type": {
+                "homepage": [
+                    "LocalBusiness",
+                    "Organization",
+                    "WebSite",
+                    "SiteLinksSearchBox"
+                ],
+                "service": [
+                    "Service",
+                    "LocalBusiness",
+                    "FAQPage",
+                    "BreadcrumbList"
+                ],
+                "portfolio": [
+                    "ImageGallery",
+                    "ImageObject",
+                    "CreativeWork",
+                    "Photograph"
+                ],
+                "about": [
+                    "Person",
+                    "Organization",
+                    "BreadcrumbList"
+                ],
+                "contact": [
+                    "LocalBusiness",
+                    "ContactPage",
+                    "PostalAddress",
+                    "GeoCoordinates"
+                ],
+                "blog": [
+                    "Article",
+                    "BlogPosting",
+                    "FAQPage",
+                    "BreadcrumbList"
+                ],
+                "pricing": [
+                    "Offer",
+                    "PriceSpecification",
+                    "Service"
+                ],
+                "testimonials": [
+                    "Review",
+                    "AggregateRating",
+                    "LocalBusiness"
+                ]
+            },
+            "output_schema": {
+                "keyword_report": {
+                    "keywords": [
+                        {
+                            "keyword": "string",
+                            "monthly_volume": "low|medium|high",
+                            "intent": "informational|commercial|transactional|navigational",
+                            "funnel_stage": "awareness|consideration|decision",
+                            "aeo_potential": "high|medium|low",
+                            "content_type": "article|service_page|faq|landing_page"
+                        }
+                    ],
+                    "top_10_priority": [
+                        "string"
+                    ],
+                    "content_gaps": [
+                        "string"
+                    ],
+                    "aeo_opportunities": [
+                        "string"
+                    ]
+                },
+                "schemas_per_url": [
+                    {
+                        "url": "string",
+                        "page_type": "string",
+                        "schemas": [
+                            {
+                                "type": "string",
+                                "purpose": "string",
+                                "json_ld": "string (complete valid JSON-LD)"
+                            }
+                        ]
+                    }
+                ],
+                "internal_linking_map": {
+                    "clusters": [
+                        {
+                            "pillar_page": "string (URL)",
+                            "topic": "string",
+                            "satellite_pages": [
+                                {
+                                    "url": "string",
+                                    "anchor_text": "string",
+                                    "link_rationale": "string"
+                                }
+                            ],
+                            "missing_pages": [
+                                "string"
+                            ],
+                            "orphan_pages": [
+                                "string"
+                            ]
+                        }
+                    ]
+                }
+            },
+            "self_validation": {
+                "schema_check": "After generating each JSON-LD block, verify @context is present, @type is valid Schema.org type, required fields for that type are non-null",
+                "on_failure": "Regenerate the specific failing schema block once with validation error appended to prompt",
+                "char_count": "Not applicable to this agent"
+            },
+            "drive_output": {
+                "folder": "01_Strategy",
+                "files": [
+                    "SEO_Strategy_Report.gdoc",
+                    "Schema_Per_URL.gdoc",
+                    "Internal_Linking_Map.gdoc"
+                ]
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-SEO-1",
+                    "description": "Full brief for photography studio",
+                    "input": "{ filtered IntakeBrief: business_name: Goa Lens Studio, services: [wedding photography, portrait, commercial], service_areas: [Goa, Mumbai], page_urls: [{url: goalensstudio.com, type: homepage}, {url: goalensstudio.com/services, type: service}] }",
+                    "expected_output": "30 keywords with intent labels, 2 URL schema blocks (LocalBusiness+Org+WebSite+SiteLinksSearchBox for homepage; Service+LocalBusiness+FAQPage+BreadcrumbList for service page), 1 internal linking cluster"
+                },
+                {
+                    "id": "TP-SEO-2",
+                    "description": "Portfolio page schema generation",
+                    "input": "{ page_url: { url: goalensstudio.com/portfolio, type: portfolio } }",
+                    "expected_output": "JSON-LD blocks: ImageGallery, ImageObject, CreativeWork, Photograph — all with real business data populated"
+                },
+                {
+                    "id": "TP-SEO-3",
+                    "description": "AEO gap check for photography keywords",
+                    "input": "{ keyword: 'best wedding photographer Goa', target_business: Goa Lens Studio }",
+                    "expected_output": "aeo_potential: high, content_gaps includes 'FAQ page answering top 10 wedding photography questions', aeo_opportunities includes question-format keywords"
+                }
+            ]
+        },
+        {
+            "agent_id": "google_ads_agent",
+            "name": "Google Ads Strategy Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/google_ads_agent-card.json",
+            "a2a_endpoint": "local://google_ads_agent",
+            "persona_file": "agents/google_ads_agent.md",
+            "model": "gemini-2.0-flash",
+            "temperature_guidance": "0.2 — precise; campaign structure must be actionable and specific",
+            "execution_type": "parallel_node",
+            "node_position": "strategy_phase",
+            "timeout_seconds": 90,
+            "description": "Builds a complete Google Ads campaign structure: ad groups with tightly themed keyword lists, match type recommendations, negative keyword lists, CPC estimates in INR, bid strategy, location targeting, ad schedule, and audience layering suggestions.",
+            "tools": [
+                "google_search_grounding"
+            ],
+            "mcp_servers": [
+                "gdrive",
+                "gsheets"
+            ],
+            "grounding": true,
+            "a2a_receives_from": [
+                "supervisor"
+            ],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [
+                "intake.brief.v1 (filtered: business_name, services, service_areas, target_customer, monthly_budget, campaign_goal, competitors)"
+            ],
+            "context_writes": [
+                {
+                    "key": "gads.strategy.v1",
+                    "description": "Complete campaign structure with all ad groups, keywords, and bid strategy"
+                }
+            ],
+            "output_schema": {
+                "campaign_type": "Search|Performance_Max|Both",
+                "campaign_name": "string",
+                "daily_budget_inr": "number",
+                "bidding_strategy": "string",
+                "bidding_rationale": "string",
+                "location_targeting": [
+                    "string"
+                ],
+                "ad_schedule": "string",
+                "ad_groups": [
+                    {
+                        "name": "string",
+                        "theme": "string",
+                        "keywords": [
+                            "string (10-15 per group)"
+                        ],
+                        "match_types": "string (e.g. 'Exact + Phrase mix, no Broad')",
+                        "negative_keywords": [
+                            "string (10-15 per group)"
+                        ],
+                        "estimated_cpc_inr": "string (e.g. '₹45-₹85')",
+                        "bid_rationale": "string"
+                    }
+                ],
+                "audience_targeting": {
+                    "in_market_segments": [
+                        "string"
+                    ],
+                    "custom_intent": [
+                        "string"
+                    ],
+                    "demographic_filters": "string"
+                },
+                "recommendations": [
+                    "string"
+                ]
+            },
+            "drive_output": {
+                "folder": "01_Strategy",
+                "files": [
+                    "Google_Ads_Campaign_Structure.gdoc",
+                    "Google_Ads_Keywords.gsheet"
+                ]
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-GADS-1",
+                    "description": "Wedding photography studio with ₹30,000/month budget",
+                    "input": "{ business: Goa Lens Studio, services: [wedding photography, portraits, commercial], service_areas: [Goa, Mumbai], target_customer: couples 24-35 planning destination weddings, budget: ₹30000, goal: lead_generation }",
+                    "expected_output": "3-4 ad groups (Wedding Goa, Destination Wedding, Portrait Sessions, Commercial), daily budget ₹1000, bid strategy: Maximize Conversions, negative keywords include [free, DIY, course, stock photo]"
+                },
+                {
+                    "id": "TP-GADS-2",
+                    "description": "Small budget edge case (₹5,000/month)",
+                    "input": "{ budget: ₹5000, campaign_goal: lead_generation }",
+                    "expected_output": "Recommendation to use Search only (not PMax), 1-2 ad groups maximum, note about budget constraints limiting scale"
+                },
+                {
+                    "id": "TP-GADS-3",
+                    "description": "Multi-city service area",
+                    "input": "{ service_areas: [Goa, Mumbai, Bangalore, Chennai], budget: ₹60000 }",
+                    "expected_output": "Location-specific ad groups or location bid adjustments, recommendation to separate campaigns by city for budget control"
+                }
+            ]
+        },
+        {
+            "agent_id": "meta_ads_agent",
+            "name": "Meta Ads Strategy Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/meta_ads_agent-card.json",
+            "a2a_endpoint": "local://meta_ads_agent",
+            "persona_file": "agents/meta_ads_agent.md",
+            "model": "gemini-2.0-flash",
+            "temperature_guidance": "0.3 — creative enough for audience ideation, precise enough for targeting specs",
+            "execution_type": "parallel_node",
+            "node_position": "strategy_phase",
+            "timeout_seconds": 90,
+            "description": "Designs a complete Meta Ads audience funnel across three stages (TOFU/MOFU/BOFU) with specific interest categories, behaviour targets, lookalike seeds, retargeting windows, ad format recommendations per stage, budget split, and exclusion audiences.",
+            "tools": [
+                "google_search_grounding"
+            ],
+            "mcp_servers": [
+                "gdrive"
+            ],
+            "grounding": true,
+            "a2a_receives_from": [
+                "supervisor"
+            ],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [
+                "intake.brief.v1 (filtered: target_customer, service_areas, monthly_budget, unique_value_props, campaign_goal, services)"
+            ],
+            "context_writes": [
+                {
+                    "key": "meta.strategy.v1",
+                    "description": "Full Meta audience funnel strategy with TOFU/MOFU/BOFU structure"
+                }
+            ],
+            "output_schema": {
+                "funnel_stages": {
+                    "TOFU": {
+                        "goal": "Awareness",
+                        "audience_type": "Interest-based | Broad",
+                        "interests": [
+                            "string (specific Facebook interest categories)"
+                        ],
+                        "behaviours": [
+                            "string"
+                        ],
+                        "demographics": "string",
+                        "ad_formats": [
+                            "Reels",
+                            "Stories",
+                            "Feed Video"
+                        ],
+                        "creative_direction": "string",
+                        "budget_percentage": "number"
+                    },
+                    "MOFU": {
+                        "goal": "Consideration",
+                        "audience_type": "Custom Audience",
+                        "source": "string (e.g. 'Video viewers 50%+ from TOFU ads')",
+                        "lookalike_percentage": "number (1-5)",
+                        "ad_formats": [
+                            "Carousel",
+                            "Collection",
+                            "Feed Image"
+                        ],
+                        "creative_direction": "string",
+                        "budget_percentage": "number"
+                    },
+                    "BOFU": {
+                        "goal": "Conversion",
+                        "audience_type": "Retargeting",
+                        "retargeting_window_days": "number",
+                        "retargeting_sources": [
+                            "string"
+                        ],
+                        "ad_formats": [
+                            "Single Image",
+                            "Lead Form",
+                            "DM"
+                        ],
+                        "creative_direction": "string",
+                        "budget_percentage": "number"
+                    }
+                },
+                "exclusion_audiences": [
+                    "string"
+                ],
+                "frequency_cap": "string",
+                "pixel_events_to_track": [
+                    "string"
+                ],
+                "retargeting_sequences": [
+                    {
+                        "sequence_name": "string",
+                        "step": "number",
+                        "audience": "string",
+                        "message": "string",
+                        "days_after_previous": "number"
+                    }
+                ]
+            },
+            "drive_output": {
+                "folder": "01_Strategy",
+                "files": [
+                    "Meta_Ads_Audience_Strategy.gdoc"
+                ]
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-META-1",
+                    "description": "Wedding photography studio targeting couples",
+                    "input": "{ target_customer: couples 24-35 planning destination weddings in Goa, budget: ₹30000, unique_value_props: [candid style, drone shots, 72hr preview], campaign_goal: lead_generation }",
+                    "expected_output": "TOFU interests: [destination weddings, bridal fashion, honeymoon travel], MOFU: video viewers 50%+ + engaged with page, BOFU: website visitors 30 days + lead form openers. Budget split 40/35/25. Frequency cap 3/week TOFU."
+                },
+                {
+                    "id": "TP-META-2",
+                    "description": "Verify TOFU/MOFU/BOFU are genuinely distinct audiences (not overlapping)",
+                    "input": "{ same as TP-META-1 }",
+                    "expected_output": "Exclusion: BOFU audience excluded from TOFU. MOFU excludes BOFU. Each stage has distinct targeting mechanism: interest vs. engagement vs. retargeting. Creative direction clearly differs per stage."
+                },
+                {
+                    "id": "TP-META-3",
+                    "description": "Brand awareness goal (not lead gen)",
+                    "input": "{ campaign_goal: brand_awareness, budget: ₹20000 }",
+                    "expected_output": "Heavier TOFU allocation (60%), Reels-first format, no lead form ad format recommended, pixel events focus on video views and profile visits, not form completions"
+                }
+            ]
+        },
+        {
+            "agent_id": "copywriter_agent",
+            "name": "Ad Copywriter Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/copywriter_agent-card.json",
+            "a2a_endpoint": "local://copywriter_agent",
+            "persona_file": "agents/copywriter_agent.md",
+            "model": "gemini-2.0-flash",
+            "temperature_guidance": "Writer call: 0.7 (creative, varied). Judge call: 0.1 (consistent scoring).",
+            "execution_type": "parallel_node",
+            "node_position": "creative_phase",
+            "timeout_seconds": 120,
+            "internal_llm_calls": 2,
+            "description": "A two-pass agent. Pass 1 (Writer): generates Google RSA copy (15 headlines + 4 descriptions per ad group) and Meta copy for all 3 funnel stages with diverse psychological angles. Pass 2 (Judge): a second Gemini call scores every headline on clarity, hook, and relevance — only top-scored variants surface to the human at HITL #2.",
+            "vibe_coding_role": "The two-LLM-call pattern (writer + judge) demonstrates LLM-as-Judge evaluation in production. The judge IS an evaluation step embedded inside an agent — a key course concept.",
+            "tools": [],
+            "mcp_servers": [
+                "gsheets",
+                "gdrive"
+            ],
+            "grounding": false,
+            "a2a_receives_from": [
+                "supervisor"
+            ],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [
+                "strategy.bundle.v1 (reads: gads.strategy.v1 for ad group themes, meta.strategy.v1 for funnel stage creative directions)",
+                "intake.brief.v1 (filtered: business_name, services, unique_value_props, target_customer)"
+            ],
+            "context_writes": [
+                {
+                    "key": "copy.variants.v1",
+                    "description": "All ad copy variants with LLM judge scores attached"
+                }
+            ],
+            "character_limits": {
+                "google_rsa_headline": 30,
+                "google_rsa_description": 90,
+                "meta_headline": 27,
+                "meta_description": 27,
+                "meta_primary_text_words": 125
+            },
+            "output_schema": {
+                "google_rsa": [
+                    {
+                        "ad_group": "string",
+                        "headlines": [
+                            {
+                                "text": "string (max 30 chars ENFORCED)",
+                                "char_count": "number",
+                                "angle": "feature|benefit|location|urgency|social_proof|question|comparison|emotional|specific_number|cta|pain_point|aspiration",
+                                "judge_scores": {
+                                    "clarity": "number (1-10)",
+                                    "hook": "number (1-10)",
+                                    "relevance": "number (1-10)",
+                                    "total": "number"
+                                },
+                                "recommended": "boolean"
+                            }
+                        ],
+                        "descriptions": [
+                            {
+                                "text": "string (max 90 chars ENFORCED)",
+                                "char_count": "number",
+                                "judge_scores": {
+                                    "clarity": "number",
+                                    "cta_strength": "number",
+                                    "total": "number"
+                                },
+                                "recommended": "boolean"
+                            }
+                        ]
+                    }
+                ],
+                "meta_copy": {
+                    "TOFU": {
+                        "primary_text": "string (max 125 words)",
+                        "headline": "string (max 27 chars)",
+                        "description": "string (max 27 chars)",
+                        "cta_button": "string",
+                        "angle": "string",
+                        "judge_scores": {
+                            "angle_fit": "number",
+                            "first_line_hook": "number",
+                            "specificity": "number",
+                            "total": "number"
+                        }
+                    },
+                    "MOFU": "same schema as TOFU",
+                    "BOFU": "same schema as TOFU"
+                }
+            },
+            "self_validation": {
+                "char_count_enforcement": "Before outputting any headline, count characters. If count > 30, shorten and recount. Do NOT output headlines over limit.",
+                "judge_consistency": "Judge model temperature is 0.1 — run judge twice if scores differ by more than 2 points on any headline",
+                "meta_tofu_bofu_distinction": "Verify: TOFU primary_text does NOT mention price or offer. BOFU primary_text MUST contain a specific offer or next step."
+            },
+            "drive_output": {
+                "folder": "02_Creative",
+                "files": [
+                    "Ad_Copy_All_Variants.gsheet"
+                ]
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-COPY-1",
+                    "description": "RSA headline generation for wedding photography ad group",
+                    "input": "{ ad_group: Wedding Photography Goa, keywords: [wedding photographer goa, candid wedding photography goa], UVPs: [10 years experience, candid style, drone shots, 72hr preview], target: couples 24-35 }",
+                    "expected_output": "15 headlines all <= 30 chars, diverse angles present (not all 'feature'), judge scores attached, recommended: true on top 10"
+                },
+                {
+                    "id": "TP-COPY-2",
+                    "description": "Character limit edge case",
+                    "input": "{ requested headline: 'Award-Winning Candid Wedding Photography Goa — Book Now' }",
+                    "expected_output": "Agent self-corrects: original is 53 chars. Outputs shortened version <= 30 chars, e.g. 'Award-Winning Wedding Photos' (29 chars), notes the self-correction in output"
+                },
+                {
+                    "id": "TP-COPY-3",
+                    "description": "Meta TOFU vs BOFU distinction check",
+                    "input": "{ services: wedding photography, UVPs: [candid style, drone shots], TOFU_direction: aspirational, BOFU_direction: direct offer }",
+                    "expected_output": "TOFU primary_text: aspirational, no price mention, no 'book now'. BOFU primary_text: specific offer ('Book your consultation — limited slots for December weddings'), clear CTA."
+                }
+            ]
+        },
+        {
+            "agent_id": "visual_agent",
+            "name": "Visual Creative Agent",
+            "version": "1.0",
+            "well_known_path": ".well-known/visual_agent-card.json",
+            "a2a_endpoint": "local://visual_agent",
+            "persona_file": "agents/visual_agent.md",
+            "model": "gemini-2.0-pro",
+            "temperature_guidance": "Style extraction: 0.3 (precise visual analysis). Prompt generation: 0.8 (creative, imaginative).",
+            "execution_type": "parallel_node",
+            "node_position": "creative_phase",
+            "timeout_seconds": 120,
+            "multimodal": true,
+            "description": "A multimodal agent. Phase 1: Uses Gemini Vision to analyse uploaded portfolio photos and extract a structured visual style profile. Phase 2: Uses the style profile to write Imagen 3 prompts for 3 ad formats (1:1, 4:5, 9:16) and 2 Reel scripts (15s + 30s) — all aesthetically matched to the photographer's existing style.",
+            "tools": [
+                "gemini_vision",
+                "imagen_3"
+            ],
+            "mcp_servers": [
+                "gdrive"
+            ],
+            "grounding": false,
+            "a2a_receives_from": [
+                "supervisor"
+            ],
+            "a2a_sends_to": [
+                "supervisor"
+            ],
+            "context_reads": [
+                "intake.brief.v1 (filtered: portfolio_images, target_customer, services, business_name)",
+                "meta.strategy.v1 (reads: ad_formats per funnel stage for format alignment)"
+            ],
+            "context_writes": [
+                {
+                    "key": "visual.concepts.v1",
+                    "description": "Style profile + Imagen prompts + Reel scripts"
+                }
+            ],
+            "output_schema": {
+                "style_profile": {
+                    "color_palette": {
+                        "dominant_colors": [
+                            "string"
+                        ],
+                        "temperature": "warm|cool|neutral",
+                        "saturation": "vibrant|muted|desaturated",
+                        "contrast": "high|medium|low"
+                    },
+                    "lighting_style": {
+                        "type": "natural|studio|mixed",
+                        "quality": "hard|soft|diffused",
+                        "preferred_time": "golden_hour|midday|cloudy|indoor"
+                    },
+                    "composition": {
+                        "framing": "centered|rule_of_thirds|asymmetric",
+                        "depth_of_field": "shallow|deep",
+                        "perspective": "eye_level|low|high"
+                    },
+                    "editing_style": "airy|moody|vibrant|filmic|clean|faded",
+                    "mood": "string",
+                    "style_summary": "string (2-3 sentences)",
+                    "imagen_style_tags": [
+                        "string"
+                    ]
+                },
+                "ad_image_concepts": [
+                    {
+                        "format": "1x1|4x5|9x16",
+                        "dimensions": "string",
+                        "use_case": "string",
+                        "imagen_prompt": "string (detailed, style-matched, no text in image)",
+                        "mood_direction": "string"
+                    }
+                ],
+                "reel_scripts": [
+                    {
+                        "duration": "15s|30s",
+                        "hook": "string (first 2 seconds — pattern interrupt)",
+                        "scenes": [
+                            {
+                                "second_range": "string (e.g. 0-3)",
+                                "visual": "string",
+                                "on_screen_text": "string",
+                                "voiceover": "string (optional)"
+                            }
+                        ],
+                        "music_mood": "string",
+                        "cta_final_3_seconds": "string"
+                    }
+                ]
+            },
+            "drive_output": {
+                "folder": "02_Creative",
+                "files": [
+                    "Visual_Concepts_And_Prompts.gdoc",
+                    "Reel_Scripts.gdoc",
+                    "Images/ (subfolder for Imagen-generated reference images)"
+                ]
+            },
+            "test_prompts": [
+                {
+                    "id": "TP-VIS-1",
+                    "description": "Style extraction from uploaded portfolio images",
+                    "input": "{ portfolio_images: [path/to/wedding1.jpg, path/to/portrait1.jpg, path/to/commercial1.jpg], business: Goa Lens Studio }",
+                    "expected_output": "style_profile.color_palette populated with real observed values, style_summary: 2-3 sentences accurately describing the photographer's aesthetic, imagen_style_tags: [cinematic, warm tones, natural light, shallow depth of field, golden hour] (example — based on actual images)"
+                },
+                {
+                    "id": "TP-VIS-2",
+                    "description": "Imagen prompt generation for 9x16 Story format",
+                    "input": "{ style_profile: [from TP-VIS-1], target: couples 24-35, service: wedding photography, format: 9x16 }",
+                    "expected_output": "imagen_prompt contains: subject description, lighting direction, color grade instruction, composition (rule of thirds or centre), mood, lens/depth-of-field language, explicit 'no text in image' instruction"
+                },
+                {
+                    "id": "TP-VIS-3",
+                    "description": "15-second Reel script with pattern interrupt hook",
+                    "input": "{ service: wedding photography Goa, target: engaged couples, style: warm, candid }",
+                    "expected_output": "hook at 0-2s: visually surprising shot (not a standard wedding couple pose), 4-5 scene breakdown, each scene <= 4 seconds, CTA in final 2s: 'Link in bio — your Goa wedding story starts here'"
+                }
+            ]
+        }
+    ],
+    "_delivery_phase": {
+        "note": "The delivery phase is not an agent — it is a MCP pipeline triggered by the Supervisor after HITL #3 approval.",
+        "steps": [
+            {
+                "step": 1,
+                "tool": "gdrive_mcp",
+                "action": "create_folder",
+                "name": "{project_name}"
+            },
+            {
+                "step": 2,
+                "tool": "gdrive_mcp",
+                "action": "create_subfolder",
+                "names": [
+                    "01_Strategy",
+                    "02_Creative",
+                    "02_Creative/Images",
+                    "03_Final_Deliverable"
+                ]
+            },
+            {
+                "step": 3,
+                "tool": "gdrive_mcp",
+                "action": "upload_docs",
+                "source": "context store seo.strategy + gads.strategy + meta.strategy",
+                "destination": "01_Strategy"
+            },
+            {
+                "step": 4,
+                "tool": "gdrive_mcp",
+                "action": "upload_docs",
+                "source": "context store copy.variants + visual.concepts",
+                "destination": "02_Creative"
+            },
+            {
+                "step": 5,
+                "tool": "gdrive_mcp",
+                "action": "upload_docs",
+                "source": "30-day calendar + KPI tracker (generated by supervisor)",
+                "destination": "03_Final_Deliverable"
+            },
+            {
+                "step": 6,
+                "tool": "gdrive_mcp",
+                "action": "set_permission",
+                "type": "viewer_link",
+                "scope": "03_Final_Deliverable only"
+            },
+            {
+                "step": 7,
+                "tool": "gmail_mcp",
+                "action": "send_email",
+                "to": "{user_email}",
+                "content": "delivery email with Drive folder link"
+            }
+        ]
+    }
+}

@@ -1,0 +1,32 @@
+{
+  "project_name": "Full-Funnel Marketing Agent",
+  "description": "Multi-agent campaign system for digital marketing and photography clients",
+  "agent_mode": "review_driven",
+  "model": "gemini-2.0-flash",
+  "agents_dir": "./agents",
+  "mcp_config": "./mcp/mcp_config.json",
+  "outputs_dir": "./outputs",
+  "max_parallel_agents": 4,
+  "human_checkpoints": [
+    "after_strategy",
+    "after_creative",
+    "before_delivery"
+  ],
+  "session_persistence": {
+    "enabled": true,
+    "storage_path": "./outputs/sessions/",
+    "ttl_hours": 72
+  },
+  "evaluation": {
+    "enabled": true,
+    "judge_model": "gemini-2.0-pro",
+    "rubric": "./evaluation/judge_rubric.md",
+    "trace_metrics": "./evaluation/trace_metrics.json",
+    "output_path": "./outputs/eval/"
+  },
+  "frontend": {
+    "enabled": true,
+    "path": "./frontend/",
+    "port": 3000
+  }
+}

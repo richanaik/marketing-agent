@@ -1,0 +1,12 @@
+{
+  "metrics": [
+    { "name": "total_wall_time_seconds", "target": "under 600", "unit": "seconds" },
+    { "name": "tool_call_success_rate", "target": "above 90%", "unit": "percentage" },
+    { "name": "hitl_checkpoint_count", "target": "exactly 3", "unit": "count" },
+    { "name": "parallel_strategy_time_seconds", "target": "under 120", "unit": "seconds" },
+    { "name": "json_parse_success_rate", "target": "above 95%", "unit": "percentage" },
+    { "name": "schema_validation_pass_rate", "target": "100%", "unit": "percentage" },
+    { "name": "char_limit_compliance_rate", "target": "100%", "unit": "percentage" },
+    { "name": "drive_upload_success", "target": "true", "unit": "boolean" }
+  ]
+}

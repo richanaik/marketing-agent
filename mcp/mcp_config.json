@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gdrive"
+      ],
+      "env": {
+        "GOOGLE_CREDENTIALS_PATH": "./credentials.json"
+      }
+    },
+    "gmail": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gmail"
+      ],
+      "env": {
+        "GOOGLE_CREDENTIALS_PATH": "./credentials.json"
+      }
+    },
+    "gsheets": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gsheets"
+      ],
+      "env": {
+        "GOOGLE_CREDENTIALS_PATH": "./credentials.json"
+      }
+    }
+  }
+}
